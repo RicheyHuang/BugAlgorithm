@@ -178,8 +178,6 @@ double Sonar(cv::Mat& map, Robot& cleanbot, const Direction2D& detect_direction)
             }
         }
     }
-
-    return INT_MAX;
 }
 
 void DetectWall(cv::Mat& map, Robot& cleanbot, double& left_readout, double& right_readout)
@@ -390,7 +388,7 @@ int main() {
         cv::imshow("map", map);
         cv::waitKey(1);
     }
-    BugAlgorithm(map, cleanbot, M_PI/180, 10, 15000);
+    BugAlgorithm(map, cleanbot, M_PI/180, 4, 15000);
     cv::imshow("map", map);
     cv::waitKey(0);
     return 0;
