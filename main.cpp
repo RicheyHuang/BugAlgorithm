@@ -208,23 +208,24 @@ void MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& ma
     }
 }
 
-void MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map)
+bool MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map)
 {
-    std::mt19937 random_num_generator(std::random_device{}());
-    std::uniform_real_distribution<> uniform_distribution(-cleanbot.translation_error_pix, cleanbot.translation_error_pix);
-    double actual_translate_pix = translate_pix + uniform_distribution(random_num_generator);
-    Point2D end = Point2D(cleanbot.center.x+int(cleanbot.direction[0]*(actual_translate_pix+5)), cleanbot.center.y+int(cleanbot.direction[1]*(actual_translate_pix+5)));
-    Point2D start = cleanbot.center;
-
-    cv::LineIterator path(map, cv::Point(start.x, start.y), cv::Point(end.x, end.y));
-    for(int i = 1; i <= actual_translate_pix; i++)
+    if(DetectCollisions(map, cleanbot)[2])
     {
-        if(DetectCollision(map, cleanbot))
-        {
-//            MoveBackwardRobot(cleanbot, cleanbot.robot_radius*2, map);
-            break;
-        }
-        else
+        return false;
+    }
+    else
+    {
+        std::mt19937 random_num_generator(std::random_device{}());
+        std::uniform_real_distribution<> uniform_distribution(-cleanbot.translation_error_pix,
+                                                              cleanbot.translation_error_pix);
+        double actual_translate_pix = translate_pix + uniform_distribution(random_num_generator);
+        Point2D end = Point2D(cleanbot.center.x + int(cleanbot.direction[0] * (actual_translate_pix + 5)),
+                              cleanbot.center.y + int(cleanbot.direction[1] * (actual_translate_pix + 5)));
+        Point2D start = cleanbot.center;
+
+        cv::LineIterator path(map, cv::Point(start.x, start.y), cv::Point(end.x, end.y));
+        for (int i = 1; i <= actual_translate_pix; i++)
         {
             cleanbot.center = Point2D(path.pos().x, path.pos().y);
 
@@ -232,8 +233,16 @@ void MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map
             cv::imshow("map", map);
             cv::waitKey(1);
 
-            path++;
+            if(DetectCollisions(map, cleanbot)[2])
+            {
+                break;
+            }
+            else
+            {
+                path++;
+            }
         }
+        return true;
     }
 }
 
@@ -365,7 +374,7 @@ void QuickBugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, c
     }
 }
 
-void BugAlgorithm1(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
+void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
 {
     int travelled_dist = 0;
     double left_readout, right_readout;
@@ -396,10 +405,24 @@ void BugAlgorithm1(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const
                 angles.emplace_back(it->second);
             }
             std::sort(angles.begin(), angles.end());
-            rad = *(angles.begin() + (angles.size() / 2));
 
-            RotateRobot(cleanbot, rad);
-            MoveForwardRobot(cleanbot, pix_delta, map);
+            auto it = angles.begin();
+            rad = *it;
+
+            while(it != angles.end())
+            {
+                RotateRobot(cleanbot, rad);
+                if(!MoveForwardRobot(cleanbot, pix_delta, map))
+                {
+                    it++;
+                    rad = *it - rad;
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             travelled_dist += pix_delta;
             angles.clear();
@@ -428,10 +451,24 @@ void BugAlgorithm1(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const
                 angles.emplace_back(it->second);
             }
             std::sort(angles.begin(), angles.end());
-            rad = *(angles.begin() + (angles.size() / 2));
 
-            RotateRobot(cleanbot, rad);
-            MoveForwardRobot(cleanbot, pix_delta, map);
+            auto it = angles.begin();
+            rad = *it;
+
+            while(it != angles.end())
+            {
+                RotateRobot(cleanbot, rad);
+                if(!MoveForwardRobot(cleanbot, pix_delta, map))
+                {
+                    it++;
+                    rad = *it - rad;
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             travelled_dist += pix_delta;
             angles.clear();
@@ -440,7 +477,7 @@ void BugAlgorithm1(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const
     }
 }
 
-void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
+void BugAlgorithm2(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
 {
     int travelled_dist = 0;
     double left_readout, right_readout;
@@ -596,18 +633,18 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
 int main() {
 
     cv::Mat3b map(cv::Size(801, 801));
-//    map.setTo(cv::Vec3b(255, 255, 255));
-//    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
-//    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
+    map.setTo(cv::Vec3b(255, 255, 255));
+    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
+    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
 
 //    std::vector<cv::Point> contour = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
 //    std::vector<std::vector<cv::Point>> contours = {contour};
 //    cv::fillPoly(map, contours, cv::Scalar(0, 0, 0));
 
-    map.setTo(cv::Vec3b(0, 0, 0));
-    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
-    std::vector<std::vector<cv::Point>> contours = {contour};
-    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
+//    map.setTo(cv::Vec3b(0, 0, 0));
+//    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
+//    std::vector<std::vector<cv::Point>> contours = {contour};
+//    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
@@ -627,7 +664,7 @@ int main() {
         cv::imshow("map", map);
         cv::waitKey(1);
     }
-    BugAlgorithm(map, cleanbot, M_PI/180, 10, 15000);
+    BugAlgorithm(map, cleanbot, M_PI/180, 4, 15000);
     cv::imshow("map", map);
     cv::waitKey(0);
     return 0;
