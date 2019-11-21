@@ -93,6 +93,91 @@ bool DetectCollision(cv::Mat& map, Robot& cleanbot)
     return isCollided;
 }
 
+std::vector<bool> DetectCollisions(cv::Mat& map, Robot& cleanbot)
+{
+    cv::Point circle_center (cleanbot.center.x, cleanbot.center.y);
+    cv::Size axes (cleanbot.robot_radius+1, cleanbot.robot_radius+1);
+
+    Direction2D x_axis = {1, 0};
+    double yaw = std::atan2(cleanbot.direction[1], cleanbot.direction[0]) - std::atan2(x_axis[1], x_axis[0]);
+
+    if(yaw > M_PI)
+    {
+        yaw -= 2*M_PI;
+    }
+    if(yaw < (-M_PI))
+    {
+        yaw += 2*M_PI;
+    }
+
+    int angle = int(90.0 + yaw/M_PI*180.0);
+    int delta = 1;
+
+    std::vector<cv::Point> left_arc;
+    int left_arc_start = 180;
+    int left_arc_end = 240;
+    bool isLeftCollided = false;
+
+    cv::ellipse2Poly(circle_center, axes, angle, left_arc_start, left_arc_end, delta, left_arc);
+
+    for(const auto& point : left_arc)
+    {
+        if(map.at<cv::Vec3b>(point) == cv::Vec3b(0,0,0)
+           || point.x < 0
+           || point.x >= map.cols
+           || point.y < 0
+           || point.y >= map.rows)
+        {
+            isLeftCollided = true;
+            break;
+        }
+    }
+
+    std::vector<cv::Point> front_arc;
+    int front_arc_start = 241;
+    int front_arc_end = 299;
+    bool isFrontCollided = false;
+
+    cv::ellipse2Poly(circle_center, axes, angle, front_arc_start, front_arc_end, delta, front_arc);
+
+    for(const auto& point : front_arc)
+    {
+        if(map.at<cv::Vec3b>(point) == cv::Vec3b(0,0,0)
+           || point.x < 0
+           || point.x >= map.cols
+           || point.y < 0
+           || point.y >= map.rows)
+        {
+            isFrontCollided = true;
+            break;
+        }
+    }
+
+    std::vector<cv::Point> right_arc;
+    int right_arc_start = 300;
+    int right_arc_end = 360;
+    bool isRightCollided = false;
+
+    cv::ellipse2Poly(circle_center, axes, angle, right_arc_start, right_arc_end, delta, right_arc);
+
+    for(const auto& point : right_arc)
+    {
+        if(map.at<cv::Vec3b>(point) == cv::Vec3b(0,0,0)
+           || point.x < 0
+           || point.x >= map.cols
+           || point.y < 0
+           || point.y >= map.rows)
+        {
+            isRightCollided = true;
+            break;
+        }
+    }
+
+    std::vector<bool> isCollided = {isLeftCollided||isFrontCollided||isRightCollided, isLeftCollided, isFrontCollided, isRightCollided};
+
+    return isCollided;
+}
+
 void RotateRobot(Robot& cleanbot, const double& rotate_rad)
 {
     std::mt19937 random_num_generator(std::random_device{}());
@@ -115,9 +200,9 @@ void MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& ma
     {
         cleanbot.center = Point2D(path.pos().x, path.pos().y);
 
-        map.at<cv::Vec3b>(cleanbot.center.y, cleanbot.center.x) = cv::Vec3b(255, 0, 255);
+        map.at<cv::Vec3b>(cleanbot.center.y, cleanbot.center.x) = cv::Vec3b(0, 255, 255);
         cv::imshow("map", map);
-        cv::waitKey(1);
+        cv::waitKey(100);
 
         path++;
     }
@@ -136,7 +221,7 @@ void MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map
     {
         if(DetectCollision(map, cleanbot))
         {
-            MoveBackwardRobot(cleanbot, cleanbot.robot_radius, map);
+//            MoveBackwardRobot(cleanbot, cleanbot.robot_radius*2, map);
             break;
         }
         else
@@ -280,7 +365,7 @@ void QuickBugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, c
     }
 }
 
-void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
+void BugAlgorithm1(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
 {
     int travelled_dist = 0;
     double left_readout, right_readout;
@@ -355,21 +440,174 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
     }
 }
 
+void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
+{
+    int travelled_dist = 0;
+    double left_readout, right_readout;
+    std::multimap<double, double, std::less<>> readout2angle;
+    std::vector<double> angles;
+
+    std::vector<bool> detections;
+    bool isCollided, isLeftSideCollided, isFrontSideCollided, isRightSideCollided;
+
+//    std::vector<bool> detections = DetectCollisions(map, cleanbot);
+//    bool isCollided = detections[0];
+//    bool isRightSideCollided = detections[3];
+//    bool isLeftSideCollided, isFrontSideCollided;
+
+    DetectWall(map, cleanbot, left_readout, right_readout);
+    if(left_readout < right_readout)
+//    if(isCollided && (!isRightSideCollided))
+    {
+        while(travelled_dist <= accum_distance)
+        {
+            double rad = 0.0;
+            while (rad < 2 * M_PI) {
+                RotateRobot(cleanbot, double(rad_delta));
+                DetectWall(map, cleanbot, left_readout, right_readout);
+                readout2angle.insert(std::make_pair(left_readout, double(rad)));
+                rad += rad_delta;
+            }
+            rad = 2 * M_PI - (rad - rad_delta);
+            RotateRobot(cleanbot, rad);
+
+            double min_readout = readout2angle.begin()->first;
+
+            std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
+                    min_readout);
+            for (auto it = lower_upper.first; it != lower_upper.second; it++) {
+                angles.emplace_back(it->second);
+            }
+            std::sort(angles.begin(), angles.end());
+
+            detections = DetectCollisions(map, cleanbot);
+            isCollided = detections[0];
+            isLeftSideCollided = detections[1];
+            isFrontSideCollided = detections[2];
+            isRightSideCollided = detections[3];
+
+            if(!isCollided)
+            {
+                rad = angles[angles.size() / 2];
+            }
+            else
+            {
+                if(isFrontSideCollided)
+                {
+                    if((!isLeftSideCollided) && (!isRightSideCollided))
+                    {
+                        rad = angles[angles.size() / 2];
+                    }
+                    else
+                    {
+                        rad = angles.back();
+                    }
+                }
+                else
+                {
+                    if(isLeftSideCollided && isRightSideCollided)
+                    {
+                        rad = angles.back();
+                    }
+                    else
+                    {
+                        rad = angles[angles.size() / 2];
+                    }
+                }
+            }
+
+            RotateRobot(cleanbot, rad);
+            MoveForwardRobot(cleanbot, pix_delta, map);
+
+            travelled_dist += pix_delta;
+            angles.clear();
+            readout2angle.clear();
+        }
+    }
+    else
+    {
+        while(travelled_dist <= accum_distance)
+        {
+            double rad = 0.0;
+            while (rad > -2 * M_PI) {
+                RotateRobot(cleanbot, double(-rad_delta));
+                DetectWall(map, cleanbot, left_readout, right_readout);
+                readout2angle.insert(std::make_pair(right_readout, double(rad)));
+                rad -= rad_delta;
+            }
+            rad = -2 * M_PI - (rad + rad_delta);
+            RotateRobot(cleanbot, rad);
+
+            double min_readout = readout2angle.begin()->first;
+
+            std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
+                    min_readout);
+            for (auto it = lower_upper.first; it != lower_upper.second; it++) {
+                angles.emplace_back(it->second);
+            }
+            std::sort(angles.begin(), angles.end());
+
+            detections = DetectCollisions(map, cleanbot);
+            isCollided = detections[0];
+            isLeftSideCollided = detections[1];
+            isFrontSideCollided = detections[2];
+            isRightSideCollided = detections[3];
+
+            if(!isCollided)
+            {
+                rad = angles[angles.size() / 2];
+            }
+            else
+            {
+                if(isFrontSideCollided)
+                {
+                    if((!isLeftSideCollided) && (!isRightSideCollided))
+                    {
+                        rad = angles[angles.size() / 2];
+                    }
+                    else
+                    {
+                        rad = angles.front();
+                    }
+                }
+                else
+                {
+                    if(isLeftSideCollided && isRightSideCollided)
+                    {
+                        rad = angles.front();
+                    }
+                    else
+                    {
+                        rad = angles[angles.size() / 2];
+                    }
+                }
+            }
+
+            RotateRobot(cleanbot, rad);
+            MoveForwardRobot(cleanbot, pix_delta, map);
+
+            travelled_dist += pix_delta;
+            angles.clear();
+            readout2angle.clear();
+        }
+    }
+}
+
 int main() {
 
     cv::Mat3b map(cv::Size(801, 801));
-    map.setTo(cv::Vec3b(255, 255, 255));
-    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
-    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
+//    map.setTo(cv::Vec3b(255, 255, 255));
+//    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
+//    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
 
 //    std::vector<cv::Point> contour = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
 //    std::vector<std::vector<cv::Point>> contours = {contour};
 //    cv::fillPoly(map, contours, cv::Scalar(0, 0, 0));
 
-//    map.setTo(cv::Vec3b(0, 0, 0));
-//    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
-//    std::vector<std::vector<cv::Point>> contours = {contour};
-//    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
+    map.setTo(cv::Vec3b(0, 0, 0));
+    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
+    std::vector<std::vector<cv::Point>> contours = {contour};
+    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
@@ -380,6 +618,7 @@ int main() {
     {
         if(DetectCollision(map, cleanbot))
         {
+//            MoveBackwardRobot(cleanbot, cleanbot.robot_radius*2, map);
             break;
         }
         cleanbot.center = Point2D(line.pos().x, line.pos().y);
@@ -388,7 +627,7 @@ int main() {
         cv::imshow("map", map);
         cv::waitKey(1);
     }
-    BugAlgorithm(map, cleanbot, M_PI/180, 4, 15000);
+    BugAlgorithm(map, cleanbot, M_PI/180, 10, 15000);
     cv::imshow("map", map);
     cv::waitKey(0);
     return 0;
