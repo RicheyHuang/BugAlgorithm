@@ -467,97 +467,6 @@ void TOFCamera(cv::Mat& map, Robot& cleanbot)
 {
 }
 
-//void QuickBugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
-//{
-//    int travelled_dist = 0;
-//    double left_readout, right_readout;
-//    double old_left_readout, old_right_readout;
-//
-//    while(travelled_dist <= accum_distance)
-//    {
-//       DetectWall(map, cleanbot, left_readout, right_readout);
-//
-//       if(left_readout < right_readout)
-//       {
-//           old_left_readout = left_readout;
-//
-//           while(old_left_readout == left_readout)
-//           {
-//               RotateRobot(cleanbot, rad_delta, map);
-//               DetectWall(map, cleanbot, left_readout, right_readout);
-//           }
-//
-//           if(left_readout < old_left_readout)
-//           {
-//                while(left_readout <= old_left_readout)
-//                {
-//                    old_left_readout = left_readout;
-//                    RotateRobot(cleanbot, rad_delta, map);
-//                    DetectWall(map, cleanbot, left_readout, right_readout);
-//                }
-//                RotateRobot(cleanbot, -rad_delta, map);
-//           }
-//           else if(left_readout > old_left_readout)
-//           {
-//               old_left_readout = left_readout;
-//               RotateRobot(cleanbot, -rad_delta, map);
-//               DetectWall(map, cleanbot, left_readout, right_readout);
-//
-//               while(left_readout <= old_left_readout)
-//               {
-//                   old_left_readout = left_readout;
-//                   RotateRobot(cleanbot, -rad_delta, map);
-//                   DetectWall(map, cleanbot, left_readout, right_readout);
-//               }
-//               RotateRobot(cleanbot, rad_delta, map);
-//           }
-//
-//           MoveForwardRobot(cleanbot, pix_delta, map);
-//           travelled_dist += pix_delta;
-//       }
-//       else
-//       {
-//           old_right_readout = right_readout;
-//
-//           while(old_right_readout == right_readout)
-//           {
-//               RotateRobot(cleanbot, rad_delta, map);
-//               DetectWall(map, cleanbot, left_readout, right_readout);
-//           }
-//
-//           if(right_readout < old_right_readout)
-//           {
-//               while(right_readout <= old_right_readout)
-//               {
-//                   old_right_readout = right_readout;
-//                   RotateRobot(cleanbot, rad_delta, map);
-//                   DetectWall(map, cleanbot, left_readout, right_readout);
-//               }
-//               RotateRobot(cleanbot, -rad_delta, map);
-//           }
-//           else if(right_readout > old_right_readout)
-//           {
-//               old_right_readout = right_readout;
-//               RotateRobot(cleanbot, -rad_delta, map);
-//               DetectWall(map, cleanbot, left_readout, right_readout);
-//
-//               while(right_readout <= old_right_readout)
-//               {
-//                   old_right_readout = right_readout;
-//                   RotateRobot(cleanbot, -rad_delta, map);
-//                   DetectWall(map, cleanbot, left_readout, right_readout);
-//               }
-//               RotateRobot(cleanbot, rad_delta, map);
-//           }
-//
-//           MoveForwardRobot(cleanbot, pix_delta, map);
-//           travelled_dist += pix_delta;
-//
-//
-//       }
-//    }
-//}
-
 void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
 {
     int travelled_dist = 0;
@@ -570,22 +479,24 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
     {
         while(travelled_dist <= accum_distance)
         {
-            if(!DetectFrontCollision(map, cleanbot))
-            {
-                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, LEFT_WALL_FOLLOWING_ENABLED);
-                travelled_dist += int(actual_pix);
-            }
-            else
-            {
-                double rad = rad_delta;
-                while (rad < 2 * M_PI)
+//            if(!DetectFrontCollision(map, cleanbot))
+//            {
+//                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, LEFT_WALL_FOLLOWING_ENABLED);
+//                travelled_dist += int(actual_pix);
+//
+//
+//
+//            }
+//            else
+//            {
+                double rad = 0.0;
+                while (rad < 2* M_PI)
                 {
                     RotateRobot(cleanbot, double(rad_delta), map);
-                    DetectWall(map, cleanbot);
                     readout2angle.insert(std::make_pair(cleanbot.left_readouts.back(), double(rad)));
                     rad += rad_delta;
                 }
-                rad = 2 * M_PI - (rad - rad_delta);
+                rad = 2* M_PI - (rad - rad_delta);
                 RotateRobot(cleanbot, rad, map);
 
                 double min_readout = readout2angle.begin()->first;
@@ -625,27 +536,30 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 angles.clear();
                 readout2angle.clear();
             }
-        }
+//        }
     }
     else
     {
         while(travelled_dist <= accum_distance)
         {
-            if(!DetectFrontCollision(map, cleanbot))
-            {
-                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, RIGHT_WALL_FOLLOWING_ENABLED);
-                travelled_dist += int(actual_pix);
-            }
-            else {
-                double rad = rad_delta;
-                while (rad < 2 * M_PI)
+//            if(!DetectFrontCollision(map, cleanbot))
+//            {
+//                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, RIGHT_WALL_FOLLOWING_ENABLED);
+//                travelled_dist += int(actual_pix);
+//
+//
+//
+//
+//            }
+//            else {
+                double rad = 0.0;
+                while (rad < 2*M_PI)
                 {
                     RotateRobot(cleanbot, double(rad_delta), map);
-                    DetectWall(map, cleanbot);
                     readout2angle.insert(std::make_pair(cleanbot.right_readouts.back(), double(rad)));
                     rad += rad_delta;
                 }
-                rad = 2 * M_PI - (rad - rad_delta);
+                rad = 2*M_PI - (rad - rad_delta);
                 RotateRobot(cleanbot, rad, map);
 
                 double min_readout = readout2angle.begin()->first;
@@ -685,26 +599,26 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 readout2angle.clear();
             }
         }
-    }
+//    }
 }
 
 int main() {
 
     cv::Mat3b map(cv::Size(801, 801));
-//    map.setTo(cv::Vec3b(255, 255, 255));
-//    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
-//    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
-
     cv::Mat canvas;
+
+    map.setTo(cv::Vec3b(255, 255, 255));
+    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
+    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
 
 //    std::vector<cv::Point> contour = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
 //    std::vector<std::vector<cv::Point>> contours = {contour};
 //    cv::fillPoly(map, contours, cv::Scalar(0, 0, 0));
 
-    map.setTo(cv::Vec3b(0, 0, 0));
-    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
-    std::vector<std::vector<cv::Point>> contours = {contour};
-    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
+//    map.setTo(cv::Vec3b(0, 0, 0));
+//    std::vector<cv::Point> contour = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
+//    std::vector<std::vector<cv::Point>> contours = {contour};
+//    cv::fillPoly(map, contours, cv::Scalar(255, 255, 255));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
@@ -729,51 +643,8 @@ int main() {
 
         line++;
     }
-    BugAlgorithm(map, cleanbot, M_PI/180, 4, 15000);
+    BugAlgorithm(map, cleanbot, M_PI/180, 5, 15000);
     cv::imshow("map", map);
     cv::waitKey(0);
     return 0;
-}
-
-int test()
-{
-    cv::Mat3b map(cv::Size(801, 801));
-    map.setTo(cv::Vec3b(255, 255, 255));
-
-    Robot cleanbot = Robot(100, Point2D(750,750), Direction2D({1,1}));
-
-    cv::Point circle_center (cleanbot.center.x, cleanbot.center.y);
-    cv::Size axes (cleanbot.robot_radius+1, cleanbot.robot_radius+1);
-
-    std::vector<cv::Point> robot_contour;
-
-    Direction2D x_axis = {1, 0};
-    double yaw = std::atan2(cleanbot.direction[1], cleanbot.direction[0]) - std::atan2(x_axis[1], x_axis[0]);
-
-    if(yaw > M_PI)
-    {
-        yaw -= 2*M_PI;
-    }
-    if(yaw < (-M_PI))
-    {
-        yaw += 2*M_PI;
-    }
-
-    int angle = int(90.0 + yaw/M_PI*180.0);
-    int arc_start = 180;
-    int arc_end = 360;
-    int delta = 1;
-
-    cv::ellipse2Poly(circle_center, axes, angle, arc_start, arc_end, delta, robot_contour);
-
-//    cv::line(map, cv::Point(cleanbot.center.x, cleanbot.center.y), cv::Point(cleanbot.center.x+cleanbot.direction[0]*cleanbot.robot_radius, cleanbot.center.y+cleanbot.direction[1]*cleanbot.robot_radius), cv::Scalar(0, 0, 255));
-//
-//    for(const auto& point : robot_contour)
-//    {
-//        map.at<cv::Vec3b>(point) = cv::Vec3b(255, 0, 0);
-//    }
-
-    cv::namedWindow("map", cv::WINDOW_NORMAL);
-    cv::imshow("map", map);
-    cv::waitKey(0);
 }
