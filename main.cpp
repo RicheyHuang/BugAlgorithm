@@ -126,8 +126,8 @@ bool DetectCollision(cv::Mat& map, Robot& cleanbot)
     int delta = 1;
 
     std::vector<cv::Point> robot_arc;
-    int robot_arc_start = 180 + int(std::acos(1-2/cleanbot.robot_radius)/M_PI*180);
-    int robot_arc_end = 360 - int(std::acos(1-2/cleanbot.robot_radius)/M_PI*180);
+    int robot_arc_start = 180 + 20;
+    int robot_arc_end = 360 - 20;
     bool isCollided = false;
 
     cv::ellipse2Poly(circle_center, axes, angle, robot_arc_start, robot_arc_end, delta, robot_arc);
@@ -191,7 +191,7 @@ bool DetectLeftCollision(cv::Mat& map, Robot& cleanbot)
     int delta = 1;
 
     std::vector<cv::Point> left_arc;
-    int left_arc_start = 180 + int(std::acos(1-2/cleanbot.robot_radius)/M_PI*180);
+    int left_arc_start = 180 + int(std::acos(1-3/cleanbot.robot_radius)/M_PI*180);
     int left_arc_end = 240;
     bool isLeftCollided = false;
 
@@ -322,7 +322,7 @@ bool DetectRightCollision(cv::Mat& map, Robot& cleanbot)
 
     std::vector<cv::Point> right_arc;
     int right_arc_start = 300;
-    int right_arc_end = 360 - int(std::acos(1-2/cleanbot.robot_radius)/M_PI*180);
+    int right_arc_end = 360 - int(std::acos(1-3/cleanbot.robot_radius)/M_PI*180);
     bool isRightCollided = false;
 
     cv::ellipse2Poly(circle_center, axes, angle, right_arc_start, right_arc_end, delta, right_arc);
@@ -388,7 +388,7 @@ double RotateRobot(Robot& cleanbot, const double& rotate_rad, cv::Mat& map)
     return actual_rotate_rad;
 }
 
-double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
+int MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
 {
     std::mt19937 random_num_generator(std::random_device{}());
     std::uniform_real_distribution<> uniform_distribution(-cleanbot.translation_error_pix,
@@ -416,7 +416,7 @@ double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& m
 
         if(wall_following == WALL_FOLLOWING_DISABLED)
         {
-            if(DetectFrontCollision(map, cleanbot))
+            if(DetectCollision(map, cleanbot))
             {
                 return i;
             }
@@ -456,7 +456,7 @@ double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& m
     return actual_translate_pix;
 }
 
-double MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
+int MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
 {
     RotateRobot(cleanbot, M_PI, map);
     double actual_translation = MoveForwardRobot(cleanbot, translate_pix, map, wall_following);
@@ -479,127 +479,115 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
     {
         while(travelled_dist <= accum_distance)
         {
-//            if(!DetectFrontCollision(map, cleanbot))
-//            {
-//                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, LEFT_WALL_FOLLOWING_ENABLED);
-//                travelled_dist += int(actual_pix);
-//
-//
-//
-//            }
-//            else
-//            {
-                double rad = 0.0;
-                while (rad < 2* M_PI)
-                {
-                    RotateRobot(cleanbot, double(rad_delta), map);
-                    readout2angle.insert(std::make_pair(cleanbot.left_readouts.back(), double(rad)));
-                    rad += rad_delta;
-                }
-                rad = 2* M_PI - (rad - rad_delta);
-                RotateRobot(cleanbot, rad, map);
-
-                double min_readout = readout2angle.begin()->first;
-
-                std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
-                        min_readout);
-                for (auto it = lower_upper.first; it != lower_upper.second; it++)
-                {
-                    angles.emplace_back(it->second);
-                }
-                std::sort(angles.begin(), angles.end());
-
-                auto it = angles.begin();
-                rad = *it;
-
-                while (it != angles.end())
-                {
-                    RotateRobot(cleanbot, rad, map);
-                    if (DetectFrontCollision(map, cleanbot))
-                    {
-                        it++;
-                        rad = *it - rad;
-                        continue;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                if (!DetectFrontCollision(map, cleanbot))
-                {
-                    double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map);
-                    travelled_dist += int(actual_pix);
-                }
-
-                angles.clear();
-                readout2angle.clear();
+            double rad = 0.0;
+            while (rad < 2* M_PI)
+            {
+                RotateRobot(cleanbot, double(rad_delta), map);
+                readout2angle.insert(std::make_pair(cleanbot.left_readouts.back(), double(rad)));
+                rad += rad_delta;
             }
-//        }
+            rad = 2* M_PI - (rad - rad_delta);
+            RotateRobot(cleanbot, rad, map);
+
+            double min_readout = readout2angle.begin()->first;
+
+            std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
+                    min_readout);
+            for (auto it = lower_upper.first; it != lower_upper.second; it++)
+            {
+                angles.emplace_back(it->second);
+            }
+            std::sort(angles.begin(), angles.end());
+
+            auto it = angles.begin();
+            rad = *it;
+
+            while (it != angles.end())
+            {
+                RotateRobot(cleanbot, rad, map);
+                if (DetectCollision(map, cleanbot))
+                {
+                    it++;
+                    rad = *it - rad;
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            while (!DetectCollision(map, cleanbot))
+            {
+                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, LEFT_WALL_FOLLOWING_ENABLED);
+                travelled_dist += int(actual_pix);
+
+                if(actual_pix < pix_delta)
+                {
+                    RotateRobot(cleanbot, -rad_delta, map);
+                    continue;
+                }
+            }
+            angles.clear();
+            readout2angle.clear();
+        }
     }
     else
     {
         while(travelled_dist <= accum_distance)
         {
-//            if(!DetectFrontCollision(map, cleanbot))
-//            {
-//                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, RIGHT_WALL_FOLLOWING_ENABLED);
-//                travelled_dist += int(actual_pix);
-//
-//
-//
-//
-//            }
-//            else {
-                double rad = 0.0;
-                while (rad < 2*M_PI)
-                {
-                    RotateRobot(cleanbot, double(rad_delta), map);
-                    readout2angle.insert(std::make_pair(cleanbot.right_readouts.back(), double(rad)));
-                    rad += rad_delta;
-                }
-                rad = 2*M_PI - (rad - rad_delta);
-                RotateRobot(cleanbot, rad, map);
-
-                double min_readout = readout2angle.begin()->first;
-
-                std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
-                        min_readout);
-                for (auto it = lower_upper.first; it != lower_upper.second; it++)
-                {
-                    angles.emplace_back(it->second);
-                }
-                std::sort(angles.begin(), angles.end());
-
-                auto it = angles.begin();
-                rad = *it;
-
-                while (it != angles.end()) {
-                    RotateRobot(cleanbot, rad, map);
-                    if (DetectFrontCollision(map, cleanbot))
-                    {
-                        it++;
-                        rad = *it - rad;
-                        continue;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                if (!DetectFrontCollision(map, cleanbot))
-                {
-                    double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map);
-                    travelled_dist += int(actual_pix);
-                }
-
-                angles.clear();
-                readout2angle.clear();
+            double rad = 0.0;
+            while (rad < 2*M_PI)
+            {
+                RotateRobot(cleanbot, double(rad_delta), map);
+                readout2angle.insert(std::make_pair(cleanbot.right_readouts.back(), double(rad)));
+                rad += rad_delta;
             }
+            rad = 2*M_PI - (rad - rad_delta);
+            RotateRobot(cleanbot, rad, map);
+
+            double min_readout = readout2angle.begin()->first;
+
+            std::pair<std::multimap<double, double>::iterator, std::multimap<double, double>::iterator> lower_upper = readout2angle.equal_range(
+                    min_readout);
+            for (auto it = lower_upper.first; it != lower_upper.second; it++)
+            {
+                angles.emplace_back(it->second);
+            }
+            std::sort(angles.begin(), angles.end());
+
+            auto it = angles.begin();
+            rad = *it;
+
+            while (it != angles.end()) {
+                RotateRobot(cleanbot, rad, map);
+                if (DetectCollision(map, cleanbot))
+                {
+                    it++;
+                    rad = *it - rad;
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            while (!DetectCollision(map, cleanbot))
+            {
+                int actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, RIGHT_WALL_FOLLOWING_ENABLED);
+                travelled_dist += int(actual_pix);
+                if(actual_pix < pix_delta)
+                {
+                    RotateRobot(cleanbot, rad_delta, map);
+                    continue;
+                }
+            }
+
+            angles.clear();
+            readout2angle.clear();
         }
-//    }
+    }
 }
 
 int main() {
@@ -609,7 +597,7 @@ int main() {
 
     map.setTo(cv::Vec3b(255, 255, 255));
     cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
-    cv::circle(map, cv::Point(300, 400), 150, cv::Scalar(255, 255, 255), -1);
+    cv::circle(map, cv::Point(300, 400), 170, cv::Scalar(255, 255, 255), -1);
 
 //    std::vector<cv::Point> contour = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
 //    std::vector<std::vector<cv::Point>> contours = {contour};
@@ -643,7 +631,7 @@ int main() {
 
         line++;
     }
-    BugAlgorithm(map, cleanbot, M_PI/180, 5, 15000);
+    BugAlgorithm(map, cleanbot, M_PI/180, 4, 15000);
     cv::imshow("map", map);
     cv::waitKey(0);
     return 0;
