@@ -524,7 +524,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
 
                 if(actual_pix < pix_delta)
                 {
-                    RotateRobot(cleanbot, -rad_delta, map);
+                    RotateRobot(cleanbot, -2*rad_delta, map);
                     continue;
                 }
             }
@@ -579,7 +579,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 travelled_dist += int(actual_pix);
                 if(actual_pix < pix_delta)
                 {
-                    RotateRobot(cleanbot, rad_delta, map);
+                    RotateRobot(cleanbot, 2*rad_delta, map);
                     continue;
                 }
             }
