@@ -1,5 +1,6 @@
 #include <iostream>
 #include <map>
+#include <deque>
 #include <algorithm>
 #include <random>
 #include <opencv2/core/core.hpp>
@@ -21,6 +22,10 @@ struct Point2D
     int y;
 };
 typedef std::vector<Point2D> Path;
+
+const int WALL_FOLLOWING_DISABLED = 0;
+const int LEFT_WALL_FOLLOWING_ENABLED = 1;
+const int RIGHT_WALL_FOLLOWING_ENABLED = 2;
 
 class Robot
 {
@@ -46,9 +51,59 @@ public:
     Point2D center;
     Direction2D direction;
 
+    std::deque<double> left_readouts;
+    std::deque<double> right_readouts;
+
     double rotation_error_rad;
     int translation_error_pix;
 };
+
+double Sonar(cv::Mat& map, const Point2D& source_pos, const double& source_radius, const Direction2D& detect_direction)
+{
+    Point2D detect_point;
+
+    int range = 0;
+    for(int i = 1; i <= INT_MAX; i++)
+    {
+        detect_point = Point2D(source_pos.x+int(detect_direction[0]*(source_radius+i)),
+                               source_pos.y+int(detect_direction[1]*(source_radius+i)));
+
+        if(detect_point.x < 0 || detect_point.x >= map.cols || detect_point.y < 0 || detect_point.y >= map.rows)
+        {
+            return range;
+        }
+        else
+        {
+            if(map.at<cv::Vec3b>(detect_point.y, detect_point.x) != cv::Vec3b(0, 0, 0))
+            {
+                range++;
+            }
+            else
+            {
+                return range;
+            }
+        }
+    }
+}
+
+void DetectWall(cv::Mat& map, Robot& cleanbot)
+{
+    Direction2D left = Eigen::Rotation2Dd(-M_PI/2)*cleanbot.direction;
+    Direction2D right = Eigen::Rotation2Dd(M_PI/2)*cleanbot.direction;
+
+    if(cleanbot.left_readouts.size()>=2)
+    {
+        cleanbot.left_readouts.pop_front();
+    }
+    cleanbot.left_readouts.emplace_back(Sonar(map, cleanbot.center, cleanbot.robot_radius, left));
+
+
+    if(cleanbot.right_readouts.size()>=2)
+    {
+        cleanbot.right_readouts.pop_front();
+    }
+    cleanbot.right_readouts.emplace_back(Sonar(map, cleanbot.center, cleanbot.robot_radius, right));
+}
 
 bool DetectCollision(cv::Mat& map, Robot& cleanbot)
 {
@@ -319,6 +374,8 @@ double RotateRobot(Robot& cleanbot, const double& rotate_rad, cv::Mat& map)
 
     cleanbot.direction = Eigen::Rotation2Dd(actual_rotate_rad) * cleanbot.direction;
 
+    DetectWall(map, cleanbot);
+
     // visualization
     cv::Mat canvas = map.clone();
     cv::circle(canvas, cv::Point(cleanbot.center.x, cleanbot.center.y), cleanbot.robot_radius, cv::Scalar(255, 0, 0));
@@ -331,7 +388,7 @@ double RotateRobot(Robot& cleanbot, const double& rotate_rad, cv::Mat& map)
     return actual_rotate_rad;
 }
 
-double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map)
+double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
 {
     std::mt19937 random_num_generator(std::random_device{}());
     std::uniform_real_distribution<> uniform_distribution(-cleanbot.translation_error_pix,
@@ -342,9 +399,11 @@ double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& m
     Point2D start = cleanbot.center;
 
     cv::LineIterator path(map, cv::Point(start.x, start.y), cv::Point(end.x, end.y));
+
     for (int i = 0; i <= actual_translate_pix; i++)
     {
         cleanbot.center = Point2D(path.pos().x, path.pos().y);
+        DetectWall(map, cleanbot);
 
         // visualization
         cv::Mat canvas = map.clone();
@@ -355,60 +414,53 @@ double MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& m
         cv::imshow("map", canvas);
         cv::waitKey(1);
 
-        if(DetectFrontCollision(map, cleanbot))
+        if(wall_following == WALL_FOLLOWING_DISABLED)
         {
-            return i;
+            if(DetectFrontCollision(map, cleanbot))
+            {
+                return i;
+            }
+            else
+            {
+                path++;
+            }
+        }
+        else if(wall_following == LEFT_WALL_FOLLOWING_ENABLED)
+        {
+            if(cleanbot.left_readouts.back() - cleanbot.left_readouts.front() > 0.0)
+            {
+                return i;
+            }
+            else
+            {
+                path++;
+            }
+        }
+        else if(wall_following == RIGHT_WALL_FOLLOWING_ENABLED)
+        {
+            if(cleanbot.right_readouts.back() - cleanbot.right_readouts.front() > 0.0)
+            {
+                return i;
+            }
+            else
+            {
+                path++;
+            }
         }
         else
         {
-            path++;
+            std::cout<<"invalid flags."<<std::endl;
+            return 0.0;
         }
     }
     return actual_translate_pix;
 }
 
-bool MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map)
+double MoveBackwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map, const int& wall_following=WALL_FOLLOWING_DISABLED)
 {
     RotateRobot(cleanbot, M_PI, map);
-    bool isSuccessful = MoveForwardRobot(cleanbot, translate_pix, map);
-    return isSuccessful;
-}
-
-double Sonar(cv::Mat& map, Robot& cleanbot, const Direction2D& detect_direction)
-{
-    Point2D detect_point;
-
-    int range = 0;
-    for(int i = 1; i <= INT_MAX; i++)
-    {
-        detect_point = Point2D(cleanbot.center.x+int(detect_direction[0]*(cleanbot.robot_radius+i)),
-                               cleanbot.center.y+int(detect_direction[1]*(cleanbot.robot_radius+i)));
-
-        if(detect_point.x < 0 || detect_point.x >= map.cols || detect_point.y < 0 || detect_point.y >= map.rows)
-        {
-            return range;
-        }
-        else
-        {
-            if(map.at<cv::Vec3b>(detect_point.y, detect_point.x) != cv::Vec3b(0, 0, 0))
-            {
-                range++;
-            }
-            else
-            {
-                return range;
-            }
-        }
-    }
-}
-
-void DetectWall(cv::Mat& map, Robot& cleanbot, double& left_readout, double& right_readout)
-{
-    Direction2D left = Eigen::Rotation2Dd(-M_PI/2)*cleanbot.direction;
-    Direction2D right = Eigen::Rotation2Dd(M_PI/2)*cleanbot.direction;
-
-    left_readout = Sonar(map, cleanbot, left);
-    right_readout = Sonar(map, cleanbot, right);
+    double actual_translation = MoveForwardRobot(cleanbot, translate_pix, map, wall_following);
+    return actual_translation;
 }
 
 void TOFCamera(cv::Mat& map, Robot& cleanbot)
@@ -509,19 +561,18 @@ void TOFCamera(cv::Mat& map, Robot& cleanbot)
 void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
 {
     int travelled_dist = 0;
-    double left_readout, right_readout;
     std::multimap<double, double, std::less<>> readout2angle;
     std::vector<double> angles;
 
-    DetectWall(map, cleanbot, left_readout, right_readout);
+    DetectWall(map, cleanbot);
 
-    if(left_readout < right_readout)
+    if(cleanbot.left_readouts.back() < cleanbot.right_readouts.back())
     {
         while(travelled_dist <= accum_distance)
         {
             if(!DetectFrontCollision(map, cleanbot))
             {
-                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map);
+                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, LEFT_WALL_FOLLOWING_ENABLED);
                 travelled_dist += int(actual_pix);
             }
             else
@@ -530,8 +581,8 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 while (rad < 2 * M_PI)
                 {
                     RotateRobot(cleanbot, double(rad_delta), map);
-                    DetectWall(map, cleanbot, left_readout, right_readout);
-                    readout2angle.insert(std::make_pair(left_readout, double(rad)));
+                    DetectWall(map, cleanbot);
+                    readout2angle.insert(std::make_pair(cleanbot.left_readouts.back(), double(rad)));
                     rad += rad_delta;
                 }
                 rad = 2 * M_PI - (rad - rad_delta);
@@ -582,7 +633,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
         {
             if(!DetectFrontCollision(map, cleanbot))
             {
-                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map);
+                double actual_pix = MoveForwardRobot(cleanbot, pix_delta, map, RIGHT_WALL_FOLLOWING_ENABLED);
                 travelled_dist += int(actual_pix);
             }
             else {
@@ -590,8 +641,8 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 while (rad < 2 * M_PI)
                 {
                     RotateRobot(cleanbot, double(rad_delta), map);
-                    DetectWall(map, cleanbot, left_readout, right_readout);
-                    readout2angle.insert(std::make_pair(right_readout, double(rad)));
+                    DetectWall(map, cleanbot);
+                    readout2angle.insert(std::make_pair(cleanbot.right_readouts.back(), double(rad)));
                     rad += rad_delta;
                 }
                 rad = 2 * M_PI - (rad - rad_delta);
