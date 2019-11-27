@@ -376,8 +376,6 @@ double RotateRobot(Robot& cleanbot, const double& rotate_rad, cv::Mat& map)
 
     DetectWall(map, cleanbot);
 
-//    std::cout<<"right readout: "<<cleanbot.right_readouts.back()<<std::endl;
-
     // visualization
     cv::Mat canvas = map.clone();
     cv::circle(canvas, cv::Point(cleanbot.center.x, cleanbot.center.y), cleanbot.robot_radius, cv::Scalar(255, 0, 0));
@@ -407,8 +405,6 @@ int MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map,
         cleanbot.center = Point2D(path.pos().x, path.pos().y);
         DetectWall(map, cleanbot);
 
-//        std::cout<<"right readout: "<<cleanbot.right_readouts.back()<<std::endl;
-
         // visualization
         cv::Mat canvas = map.clone();
         cv::circle(canvas, cv::Point(cleanbot.center.x, cleanbot.center.y), cleanbot.robot_radius, cv::Scalar(255, 0, 0));
@@ -431,7 +427,6 @@ int MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map,
         }
         else if(wall_following == LEFT_WALL_FOLLOWING_ENABLED)
         {
-            // abs necessary?
             if(std::abs(cleanbot.left_readouts.back() - cleanbot.left_readouts.front()) > 1e-6)
             {
                 return i;
@@ -443,7 +438,6 @@ int MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map,
         }
         else if(wall_following == RIGHT_WALL_FOLLOWING_ENABLED)
         {
-            // abs necessary?
             if(std::abs(cleanbot.right_readouts.back() - cleanbot.right_readouts.front()) > 1e-6)
             {
                 return i;
@@ -677,18 +671,18 @@ int main() {
     cv::Mat3b map(cv::Size(801, 801));
     cv::Mat canvas;
 
-    map.setTo(cv::Vec3b(255, 255, 255));
-    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
+//    map.setTo(cv::Vec3b(255, 255, 255));
+//    cv::circle(map, cv::Point(400, 400), 200, cv::Scalar(0, 0, 0), -1);
 //    cv::circle(map, cv::Point(300, 400), 170, cv::Scalar(255, 255, 255), -1);
 
-//    map.setTo(cv::Vec3b(0, 0, 0));
-//    std::vector<cv::Point> contour1 = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
-//    std::vector<std::vector<cv::Point>> contours1 = {contour1};
-//    cv::fillPoly(map, contours1, cv::Scalar(255, 255, 255));
-//
-//    std::vector<cv::Point> contour2 = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
-//    std::vector<std::vector<cv::Point>> contours2 = {contour2};
-//    cv::fillPoly(map, contours2, cv::Scalar(0, 0, 0));
+    map.setTo(cv::Vec3b(0, 0, 0));
+    std::vector<cv::Point> contour1 = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
+    std::vector<std::vector<cv::Point>> contours1 = {contour1};
+    cv::fillPoly(map, contours1, cv::Scalar(255, 255, 255));
+
+    std::vector<cv::Point> contour2 = {cv::Point(300, 300), cv::Point(300, 500), cv::Point(500, 500), cv::Point(500, 300)};
+    std::vector<std::vector<cv::Point>> contours2 = {contour2};
+    cv::fillPoly(map, contours2, cv::Scalar(0, 0, 0));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
