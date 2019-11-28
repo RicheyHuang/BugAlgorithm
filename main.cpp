@@ -27,6 +27,10 @@ const int WALL_FOLLOWING_DISABLED = 0;
 const int LEFT_WALL_FOLLOWING_ENABLED = 1;
 const int RIGHT_WALL_FOLLOWING_ENABLED = 2;
 
+const int AUTOMATIC = 0;
+const int COUNTER_CLOCKWISE = 1;
+const int CLOCKWISE = 2;
+
 class Robot
 {
 public:
@@ -467,12 +471,32 @@ void TOFCamera(cv::Mat& map, Robot& cleanbot)
 {
 }
 
-void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance)
+void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance, const int& encircling=AUTOMATIC)
 {
     int travelled_dist = 0;
     DetectWall(map, cleanbot);
 
-    if(cleanbot.left_readouts.back() < cleanbot.right_readouts.back())
+    int encircling_direction;
+
+    if(encircling == AUTOMATIC)
+    {
+        encircling_direction = cleanbot.left_readouts.back() < cleanbot.right_readouts.back() ? COUNTER_CLOCKWISE : CLOCKWISE;
+    }
+    else if(encircling == COUNTER_CLOCKWISE)
+    {
+        encircling_direction = encircling;
+    }
+    else if(encircling == CLOCKWISE)
+    {
+        encircling_direction = encircling;
+    }
+    else
+    {
+        std::cout<<"invalid encircling direction. input 1 for counter-clockwise or 2 for clockwise"<<std::endl;
+        return;
+    }
+
+    if(encircling_direction == COUNTER_CLOCKWISE)
     {
         while(travelled_dist <= accum_distance)
         {
@@ -807,8 +831,12 @@ int main() {
 
     map.setTo(cv::Vec3b(0, 0, 0));
     std::vector<cv::Point> contour1 = {cv::Point(10, 10), cv::Point(10, 790), cv::Point(790, 790), cv::Point(790, 10)};
+    std::vector<cv::Point> contour2 = {cv::Point(100, 800), cv::Point(400, 800), cv::Point(400, 600), cv::Point(100, 600)};
+    std::vector<cv::Point> contour3 = {cv::Point(500, 10), cv::Point(700, 10), cv::Point(700, 200), cv::Point(500, 200)};
     std::vector<std::vector<cv::Point>> contours1 = {contour1};
+    std::vector<std::vector<cv::Point>> contours2 = {contour2, contour3};
     cv::fillPoly(map, contours1, cv::Scalar(255, 255, 255));
+//    cv::fillPoly(map, contours2, cv::Scalar(0, 0, 0));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
