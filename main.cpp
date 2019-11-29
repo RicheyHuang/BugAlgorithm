@@ -410,6 +410,7 @@ int MoveForwardRobot(Robot& cleanbot, const double& translate_pix, cv::Mat& map,
         DetectWall(map, cleanbot);
 
         // visualization
+        map.at<cv::Vec3b>(cleanbot.center.y, cleanbot.center.x) = cv::Vec3b(128, 0, 128);
         cv::Mat canvas = map.clone();
         cv::circle(canvas, cv::Point(cleanbot.center.x, cleanbot.center.y), cleanbot.robot_radius, cv::Scalar(255, 0, 0));
         cv::line(canvas, cv::Point(cleanbot.center.x, cleanbot.center.y),
@@ -724,100 +725,38 @@ double CalculateYaw(const Direction2D& heading_direction, const Direction2D& ref
     return yaw;
 }
 
-int RTCoupledMoveRobot(cv::Mat& map, Robot& cleanbot, const double& left_wheel_speed, const double& right_wheel_speed, const int& time_intervals)
+double CalculateDistance(const Point2D& p1, const Point2D& p2)
 {
-    Point2D origin = cleanbot.center;
-    double robot_angular_velocity = (left_wheel_speed - right_wheel_speed) / double(cleanbot.robot_radius*2);
-    double robot_linear_velocity = (left_wheel_speed + right_wheel_speed)/2.0;
-
-    int accum_dist = 0;
-    int travelled_dist;
-
-    for(int i = 0; i < time_intervals; i++)
-    {
-        RotateRobot(cleanbot, robot_angular_velocity, map);
-        travelled_dist = MoveForwardRobot(cleanbot, robot_linear_velocity, map);
-        accum_dist += travelled_dist;
-
-        if(DetectCollision(map, cleanbot))
-        {
-            return accum_dist;
-        }
-    }
-    return accum_dist;
+    double distance = std::sqrt(std::pow((p1.x-p2.x),2)+std::pow((p1.y-p2.y),2));
+    return distance;
 }
 
-int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot,   const Direction2D& direction,    const int& time_intervals,
-                              double& left_wheel_speed,       double& right_wheel_speed,
-                              const double& yaw_error_rad,    const double& offset_error_pix)
+int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot, const Direction2D& direction, double& yaw_offset, const double& yaw_error_rad, const double& offset_error_pix)
 {
-    Point2D origin = cleanbot.center;
-    double yaw = CalculateYaw(cleanbot.direction, direction);
-    double offset = 0.0;
+    double actual_yaw;
 
-    int travelled_dist;
+    int actual_dist;
     int accum_dist = 0;
 
-    for(int i = 0; i < time_intervals; i++)
+    Point2D origin = cleanbot.center;
+    double yaw;
+    double offset = 0.0;
+
+    while(true)
     {
-        if(offset > offset_error_pix)
-        {
-            right_wheel_speed++;
-            travelled_dist = RTCoupledMoveRobot(map, cleanbot, left_wheel_speed, right_wheel_speed, 1);
-            accum_dist += travelled_dist;
-            if(DetectCollision(map, cleanbot))
-            {
-                return accum_dist;
-            }
-        }
-        else if(offset < -offset_error_pix)
-        {
-            left_wheel_speed++;
-            travelled_dist = RTCoupledMoveRobot(map, cleanbot, left_wheel_speed, right_wheel_speed, 1);
-            accum_dist += travelled_dist;
-            if(DetectCollision(map, cleanbot))
-            {
-                return accum_dist;
-            }
-        }
-        else
-        {
-            if(yaw > yaw_error_rad)
-            {
-                right_wheel_speed++;
-                travelled_dist = RTCoupledMoveRobot(map, cleanbot, left_wheel_speed, right_wheel_speed, 1);
-                accum_dist += travelled_dist;
-                if(DetectCollision(map, cleanbot))
-                {
-                    return accum_dist;
-                }
-            }
-            else if(yaw < -yaw_error_rad)
-            {
-                left_wheel_speed++;
-                travelled_dist = RTCoupledMoveRobot(map, cleanbot, left_wheel_speed, right_wheel_speed, 1);
-                accum_dist += travelled_dist;
-                if(DetectCollision(map, cleanbot))
-                {
-                    return accum_dist;
-                }
-            }
-            else
-            {
-                travelled_dist = RTCoupledMoveRobot(map, cleanbot, left_wheel_speed, right_wheel_speed, 1);
-                accum_dist += travelled_dist;
-                if(DetectCollision(map, cleanbot))
-                {
-                    return accum_dist;
-                }
-            }
-        }
+       actual_yaw = RotateRobot(cleanbot, yaw_offset, map);
+       actual_dist = MoveForwardRobot(cleanbot, cleanbot.robot_radius*2, map);
+       accum_dist += actual_dist;
+       if(DetectCollision(map, cleanbot))
+       {
+           return accum_dist;
+       }
+       yaw_offset = yaw_offset - actual_yaw;
 
-        yaw = CalculateYaw(cleanbot.direction, direction);
-        offset = std::sqrt(std::pow((cleanbot.center.x-origin.x),2)+std::pow((cleanbot.center.y-origin.y),2))*sin(yaw);
+       yaw = CalculateYaw(cleanbot.direction, direction);
+       offset = CalculateDistance(cleanbot.center, origin) * sin(yaw);
+       std::cout<<"offset: "<<offset<<std::endl;
     }
-
-    return accum_dist;
 }
 
 void SceneTest1()
@@ -956,24 +895,22 @@ int main() {
 
     int encircling = CLOCKWISE;
 
-    Direction2D inverse_direction;
+    Direction2D inverse_direction = Eigen::Rotation2Dd(M_PI)*(cleanbot.direction);
+    Direction2D baseline_direction = cleanbot.direction;
     double yaw;
 
-    int time_intervals = int(cleanbot.robot_radius*2);
-    double left_wheel_speed = 1.0;
-    double right_wheel_speed = 1.0;
     double yaw_error_rad = M_PI/180.0*3.0;
-    double offset_error_pix = 3;
+    double offset_error_pix = 0;
+    double actual_yaw;
+    double yaw_offset = 0.0;
 
     while(cleanbot.center.x < 780)
     {
-        inverse_direction = Eigen::Rotation2Dd(M_PI)*(cleanbot.direction);
-        while(!DetectCollision(map, cleanbot))
-        {
+        RectifiedMoveForwardRobot(map, cleanbot, baseline_direction, yaw_offset, yaw_error_rad, offset_error_pix);
+//        while(!DetectCollision(map, cleanbot))
+//        {
 //            MoveForwardRobot(cleanbot, 2*cleanbot.robot_radius, map);
-
-            RectifiedMoveForwardRobot(map, cleanbot, cleanbot.direction, time_intervals, left_wheel_speed, right_wheel_speed, yaw_error_rad, offset_error_pix);
-        }
+//        }
         BugAlgorithm(map, cleanbot, M_PI/180, 4, 2*cleanbot.robot_radius, encircling);
 
         if(encircling == CLOCKWISE)
@@ -994,7 +931,11 @@ int main() {
         {
             yaw += 2*M_PI;
         }
-        RotateRobot(cleanbot, -yaw, map);
+        actual_yaw = RotateRobot(cleanbot, -yaw, map);
+        yaw_offset = -yaw-actual_yaw;
+
+        baseline_direction = inverse_direction;
+        inverse_direction = Eigen::Rotation2Dd(M_PI)*(inverse_direction);
     }
 
     cv::imshow("map", map);
