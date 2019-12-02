@@ -21,7 +21,6 @@ struct Point2D
     int x;
     int y;
 };
-typedef std::vector<Point2D> Path;
 
 const int WALL_FOLLOWING_DISABLED = 0;
 const int LEFT_WALL_FOLLOWING_ENABLED = 1;
@@ -472,7 +471,7 @@ void TOFCamera(cv::Mat& map, Robot& cleanbot)
 {
 }
 
-void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance, const int& encircling=AUTOMATIC)
+int BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const int& pix_delta, const int& accum_distance, const int& encircling=AUTOMATIC)
 {
     int travelled_dist = 0;
     DetectWall(map, cleanbot);
@@ -494,7 +493,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
     else
     {
         std::cout<<"invalid encircling direction. input 1 for counter-clockwise or 2 for clockwise"<<std::endl;
-        return;
+        return travelled_dist;
     }
 
     if(encircling_direction == COUNTER_CLOCKWISE)
@@ -513,7 +512,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 travelled_dist += int(actual_pix);
                 if(travelled_dist > accum_distance)
                 {
-                    return;
+                    return travelled_dist;
                 }
 
                 accum_readout += (cleanbot.left_readouts.back() - cleanbot.left_readouts.front());
@@ -589,7 +588,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
 
                             if(travelled_dist > accum_distance)
                             {
-                                return;
+                                return travelled_dist;
                             }
 
                             readout2angle.clear();
@@ -621,7 +620,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
                 travelled_dist += int(actual_pix);
                 if(travelled_dist > accum_distance)
                 {
-                    return;
+                    return travelled_dist;
                 }
 
                 accum_readout += (cleanbot.right_readouts.back() - cleanbot.right_readouts.front());
@@ -694,7 +693,7 @@ void BugAlgorithm(cv::Mat& map, Robot& cleanbot, const double& rad_delta, const 
 
                             if(travelled_dist > accum_distance)
                             {
-                                return;
+                                return travelled_dist;
                             }
 
                             readout2angle.clear();
@@ -731,7 +730,7 @@ double CalculateDistance(const Point2D& p1, const Point2D& p2)
     return distance;
 }
 
-int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot, const Direction2D& direction, double& yaw_offset, const double& yaw_error_rad, const double& offset_error_pix)
+int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot, const Direction2D& direction, double& yaw_offset)
 {
     double actual_yaw;
 
@@ -799,6 +798,99 @@ int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot, const Direction2D& 
            }
        }
        yaw_offset = yaw_offset - actual_yaw;
+    }
+}
+
+void SwitchEncirclingDirection(int& encircling_direction)
+{
+    if(encircling_direction == CLOCKWISE)
+    {
+        encircling_direction = COUNTER_CLOCKWISE;
+    }
+    else if(encircling_direction == COUNTER_CLOCKWISE)
+    {
+        encircling_direction = CLOCKWISE;
+    }
+}
+
+void ZigzagRobot(cv::Mat& map, Robot& cleanbot, const double& detected_angle_precision_rad, const int& wall_following_translate_precision_pix,
+                 const int& termination_slice_x, const bool& scanning_direction_reverse=false, const bool& perpendicular_returning=false)
+{
+    DetectWall(map, cleanbot);
+    int encircling_direction = cleanbot.left_readouts.back() < cleanbot.right_readouts.back() ? COUNTER_CLOCKWISE : CLOCKWISE;
+
+    Direction2D baseline_direction = cleanbot.direction;
+    Direction2D inverse_direction = Eigen::Rotation2Dd(M_PI)*(cleanbot.direction);
+
+    double yaw;
+    double yaw_offset = 0.0;
+    double actual_yaw;
+
+    if(!scanning_direction_reverse)
+    {
+        while(cleanbot.center.x < termination_slice_x)
+        {
+            RectifiedMoveForwardRobot(map, cleanbot, baseline_direction, yaw_offset);
+            BugAlgorithm(map, cleanbot, detected_angle_precision_rad, wall_following_translate_precision_pix, 2*cleanbot.robot_radius, encircling_direction);
+            SwitchEncirclingDirection(encircling_direction);
+
+            if(!perpendicular_returning)
+            {
+                yaw = CalculateYaw(cleanbot.direction, inverse_direction);
+                actual_yaw = RotateRobot(cleanbot, -yaw, map);
+                yaw_offset = -yaw-actual_yaw;
+                baseline_direction = inverse_direction;
+                inverse_direction = Eigen::Rotation2Dd(M_PI)*(inverse_direction);
+            }
+            else
+            {
+                if(encircling_direction == CLOCKWISE)
+                {
+                    baseline_direction = Eigen::Rotation2Dd(-M_PI/2.0)*cleanbot.direction;
+                    actual_yaw = RotateRobot(cleanbot, -M_PI/2.0, map);
+                    yaw_offset = -M_PI/2.0-actual_yaw;
+                }
+                else if(encircling_direction == COUNTER_CLOCKWISE)
+                {
+                    baseline_direction = Eigen::Rotation2Dd(M_PI/2.0)*cleanbot.direction;
+                    actual_yaw = RotateRobot(cleanbot, M_PI/2.0, map);
+                    yaw_offset = M_PI/2.0-actual_yaw;
+                }
+            }
+        }
+    }
+    else
+    {
+        while(cleanbot.center.x > termination_slice_x)
+        {
+            RectifiedMoveForwardRobot(map, cleanbot, baseline_direction, yaw_offset);
+            BugAlgorithm(map, cleanbot, detected_angle_precision_rad, wall_following_translate_precision_pix, 2*cleanbot.robot_radius, encircling_direction);
+            SwitchEncirclingDirection(encircling_direction);
+
+            if(!perpendicular_returning)
+            {
+                yaw = CalculateYaw(cleanbot.direction, inverse_direction);
+                actual_yaw = RotateRobot(cleanbot, -yaw, map);
+                yaw_offset = -yaw - actual_yaw;
+                baseline_direction = inverse_direction;
+                inverse_direction = Eigen::Rotation2Dd(M_PI) * (inverse_direction);
+            }
+            else
+            {
+                if(encircling_direction == CLOCKWISE)
+                {
+                    baseline_direction = Eigen::Rotation2Dd(-M_PI/2.0)*cleanbot.direction;
+                    actual_yaw = RotateRobot(cleanbot, -M_PI/2.0, map);
+                    yaw_offset = -M_PI/2.0-actual_yaw;
+                }
+                else if(encircling_direction == COUNTER_CLOCKWISE)
+                {
+                    baseline_direction = Eigen::Rotation2Dd(M_PI/2.0)*cleanbot.direction;
+                    actual_yaw = RotateRobot(cleanbot, M_PI/2.0, map);
+                    yaw_offset = M_PI/2.0-actual_yaw;
+                }
+            }
+        }
     }
 }
 
@@ -917,7 +1009,8 @@ void SceneTest3()
     cv::waitKey(0);
 }
 
-int main() {
+void SceneTest4()
+{
     cv::Mat3b map(cv::Size(801, 801));
     cv::Mat canvas;
 
@@ -928,7 +1021,6 @@ int main() {
     std::vector<std::vector<cv::Point>> contours1 = {contour1};
     std::vector<std::vector<cv::Point>> contours2 = {contour2, contour3};
     cv::fillPoly(map, contours1, cv::Scalar(255, 255, 255));
-//    cv::fillPoly(map, contours2, cv::Scalar(0, 0, 0));
 
     cv::namedWindow("map", cv::WINDOW_NORMAL);
 
@@ -936,49 +1028,17 @@ int main() {
     cleanbot.setRotationError(M_PI/180.0*5.0);
     cleanbot.setTranslationError(5);
 
-    int encircling = CLOCKWISE;
-
-    Direction2D inverse_direction = Eigen::Rotation2Dd(M_PI)*(cleanbot.direction);
-    Direction2D baseline_direction = cleanbot.direction;
-    double yaw;
-
-    double yaw_error_rad = M_PI/180.0*3.0;
-    double offset_error_pix = 0;
-    double actual_yaw;
-    double yaw_offset = 0.0;
-
-    while(cleanbot.center.x < 780)
-    {
-        RectifiedMoveForwardRobot(map, cleanbot, baseline_direction, yaw_offset, yaw_error_rad, offset_error_pix);
-        BugAlgorithm(map, cleanbot, M_PI/180, 4, 2*cleanbot.robot_radius, encircling);
-
-        if(encircling == CLOCKWISE)
-        {
-            encircling = COUNTER_CLOCKWISE;
-        }
-        else if(encircling == COUNTER_CLOCKWISE)
-        {
-            encircling = CLOCKWISE;
-        }
-
-        yaw = std::atan2(cleanbot.direction[1], cleanbot.direction[0]) - std::atan2(inverse_direction[1], inverse_direction[0]);
-        if(yaw > M_PI)
-        {
-            yaw -= 2*M_PI;
-        }
-        if(yaw < (-M_PI))
-        {
-            yaw += 2*M_PI;
-        }
-        actual_yaw = RotateRobot(cleanbot, -yaw, map);
-        yaw_offset = -yaw-actual_yaw;
-
-        baseline_direction = inverse_direction;
-        inverse_direction = Eigen::Rotation2Dd(M_PI)*(inverse_direction);
-    }
+    double detected_angle_precision_rad = M_PI/180.0;
+    int wall_following_translate_precision_pix = 4;
+    int termination_slice_x = 780;
+    ZigzagRobot(map, cleanbot, detected_angle_precision_rad, wall_following_translate_precision_pix, termination_slice_x);
 
     cv::imshow("map", map);
     cv::waitKey(0);
+}
 
+int main()
+{
+    SceneTest4();
     return 0;
 }
