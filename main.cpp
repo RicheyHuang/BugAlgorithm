@@ -745,17 +745,60 @@ int RectifiedMoveForwardRobot(cv::Mat& map, Robot& cleanbot, const Direction2D& 
     while(true)
     {
        actual_yaw = RotateRobot(cleanbot, yaw_offset, map);
-       actual_dist = MoveForwardRobot(cleanbot, cleanbot.robot_radius*2, map);
-       accum_dist += actual_dist;
-       if(DetectCollision(map, cleanbot))
+       yaw = CalculateYaw(cleanbot.direction, direction);
+
+       if(offset > 0.0)
        {
-           return accum_dist;
+           if(yaw < 0.0)
+           {
+               while(offset > 0.0)
+               {
+                   actual_dist = MoveForwardRobot(cleanbot, cleanbot.robot_radius*2, map);
+                   accum_dist += actual_dist;
+
+                   offset = CalculateDistance(cleanbot.center, origin) * sin(yaw);
+                   std::cout<<"offset: "<<offset<<std::endl;
+
+                   if(DetectCollision(map, cleanbot))
+                   {
+                       return accum_dist;
+                   }
+               }
+           }
+       }
+       else if(offset < 0.0)
+       {
+           if(yaw > 0.0)
+           {
+               while(offset < 0.0)
+               {
+                   actual_dist = MoveForwardRobot(cleanbot, cleanbot.robot_radius*2, map);
+                   accum_dist += actual_dist;
+
+                   offset = CalculateDistance(cleanbot.center, origin) * sin(yaw);
+                   std::cout<<"offset: "<<offset<<std::endl;
+
+                   if(DetectCollision(map, cleanbot))
+                   {
+                       return accum_dist;
+                   }
+               }
+           }
+       }
+       else
+       {
+           actual_dist = MoveForwardRobot(cleanbot, cleanbot.robot_radius*2, map);
+           accum_dist += actual_dist;
+
+           offset = CalculateDistance(cleanbot.center, origin) * sin(yaw);
+           std::cout<<"offset: "<<offset<<std::endl;
+
+           if(DetectCollision(map, cleanbot))
+           {
+               return accum_dist;
+           }
        }
        yaw_offset = yaw_offset - actual_yaw;
-
-       yaw = CalculateYaw(cleanbot.direction, direction);
-       offset = CalculateDistance(cleanbot.center, origin) * sin(yaw);
-       std::cout<<"offset: "<<offset<<std::endl;
     }
 }
 
@@ -907,10 +950,6 @@ int main() {
     while(cleanbot.center.x < 780)
     {
         RectifiedMoveForwardRobot(map, cleanbot, baseline_direction, yaw_offset, yaw_error_rad, offset_error_pix);
-//        while(!DetectCollision(map, cleanbot))
-//        {
-//            MoveForwardRobot(cleanbot, 2*cleanbot.robot_radius, map);
-//        }
         BugAlgorithm(map, cleanbot, M_PI/180, 4, 2*cleanbot.robot_radius, encircling);
 
         if(encircling == CLOCKWISE)
